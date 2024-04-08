@@ -34,7 +34,7 @@ struct Menu;
 
 fn setup_menu(mut commands: Commands, textures: Res<TextureAssets>) {
     info!("menu");
-    commands.spawn(Camera2dBundle::default());
+    // commands.spawn(Camera2dBundle::default());
     commands
         .spawn((
             NodeBundle {
@@ -126,7 +126,7 @@ fn setup_menu(mut commands: Commands, textures: Res<TextureAssets>) {
                         },
                     ));
                     parent.spawn(ImageBundle {
-                        image: textures.bevy.clone().into(),
+                        image: textures.icon_bevy.clone().into(),
                         style: Style {
                             width: Val::Px(32.),
                             ..default()
@@ -164,7 +164,7 @@ fn setup_menu(mut commands: Commands, textures: Res<TextureAssets>) {
                         },
                     ));
                     parent.spawn(ImageBundle {
-                        image: textures.github.clone().into(),
+                        image: textures.icon_github.clone().into(),
                         style: Style {
                             width: Val::Px(32.),
                             ..default()

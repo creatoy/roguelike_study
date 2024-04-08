@@ -3,6 +3,7 @@
 mod actions;
 mod audio;
 mod loading;
+mod map;
 mod menu;
 mod player;
 
@@ -16,6 +17,7 @@ use bevy::app::App;
 #[cfg(debug_assertions)]
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::prelude::*;
+use map::{Map, MapPlugin};
 
 // This example game uses States to separate logic
 // See https://bevy-cheatbook.github.io/programming/states.html
@@ -35,17 +37,27 @@ pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
-        app.init_state::<GameState>().add_plugins((
-            LoadingPlugin,
-            MenuPlugin,
-            ActionsPlugin,
-            InternalAudioPlugin,
-            PlayerPlugin,
-        ));
+        app.init_state::<GameState>()
+            .add_plugins((
+                LoadingPlugin,
+                // MenuPlugin,
+                // ActionsPlugin,
+                // InternalAudioPlugin,
+                // PlayerPlugin,
+                MapPlugin,
+            ))
+            .add_systems(Startup, setup_camera);
 
         #[cfg(debug_assertions)]
         {
             app.add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()));
         }
     }
+}
+
+fn setup_camera(mut commands: Commands, map: Res<Map>) {
+    let mut camera_bundle = Camera2dBundle::default();
+    camera_bundle.transform.translation.x = (map.width as f32 / 2.0 - 0.5) * map.tile_size;
+    camera_bundle.transform.translation.y = (map.height as f32 / 2.0 - 0.5) * map.tile_size;
+    commands.spawn(camera_bundle);
 }
