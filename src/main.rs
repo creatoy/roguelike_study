@@ -3,7 +3,7 @@
 
 use bevy::asset::AssetMetaCheck;
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
+use bevy::window::{PresentMode, PrimaryWindow};
 use bevy::winit::WinitWindows;
 use bevy::DefaultPlugins;
 use roguelike::GamePlugin; // ToDo: Replace roguelike with your new crate name.
@@ -24,6 +24,8 @@ fn main() {
                         canvas: Some("#bevy".to_owned()),
                         // Tells wasm not to override default event handling, like F5 and Ctrl+R
                         prevent_default_event_handling: false,
+                        // Vsync off
+                        present_mode: PresentMode::AutoNoVsync,
                         ..default()
                     }),
                     ..default()

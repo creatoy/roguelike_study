@@ -33,8 +33,8 @@ pub struct TextureAssets {
     pub icon_bevy: Handle<Image>,
     #[asset(path = "textures/github.png")]
     pub icon_github: Handle<Image>,
-    #[asset(path = "textures/colored_packed.png")]
+    #[asset(path = "textures/monochrome_packed.png")]
     pub map_atlas: Handle<Image>,
-    #[asset(path = "textures/colored_packed_darkened.png")]
+    #[asset(path = "textures/monochrome_packed_darkened.png")]
     pub map_atlas_darkened: Handle<Image>,
 }

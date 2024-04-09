@@ -41,9 +41,9 @@ impl Plugin for GamePlugin {
             .add_plugins((
                 LoadingPlugin,
                 // MenuPlugin,
-                // ActionsPlugin,
+                ActionsPlugin,
                 // InternalAudioPlugin,
-                // PlayerPlugin,
+                PlayerPlugin,
                 MapPlugin,
             ))
             .add_systems(Startup, setup_camera);
@@ -57,7 +57,7 @@ impl Plugin for GamePlugin {
 
 fn setup_camera(mut commands: Commands, map: Res<Map>) {
     let mut camera_bundle = Camera2dBundle::default();
-    camera_bundle.transform.translation.x = (map.width as f32 / 2.0 - 0.5) * map.tile_size;
-    camera_bundle.transform.translation.y = (map.height as f32 / 2.0 - 0.5) * map.tile_size;
+    camera_bundle.transform.translation.x = (map.cols as f32 / 2.0 - 0.5) * map.tile_size as f32;
+    camera_bundle.transform.translation.y = (map.rows as f32 / 2.0 - 0.5) * map.tile_size as f32;
     commands.spawn(camera_bundle);
 }
