@@ -1,8 +1,10 @@
 use bevy::prelude::*;
+use bracket_pathfinding::prelude::*;
 use rand::rngs::ThreadRng;
-use rand::Rng;
+use rand::{random, Rng};
 
 use crate::loading::TextureAssets;
+use crate::player::Player;
 use crate::GameState;
 
 pub struct MapPlugin;
@@ -11,6 +13,7 @@ impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Map::new(80, 45, 16))
             .add_systems(OnEnter(GameState::Playing), spawn_map)
+            .add_systems(PreUpdate, update_view.run_if(in_state(GameState::Playing)))
             .add_systems(Update, update_map.run_if(in_state(GameState::Playing)));
     }
 }
@@ -31,9 +34,18 @@ impl Tile {
 }
 
 #[derive(Component)]
-pub struct TilePosition {
+pub struct MapTile {
     pub col: usize,
     pub row: usize,
+    pub visible: bool,
+    pub revealed: bool,
+}
+
+#[derive(Component)]
+pub struct Viewshed {
+    pub visible_tiles: Vec<Point>,
+    pub range: i32,
+    pub dirty: bool,
 }
 
 pub struct Rect {
@@ -68,8 +80,23 @@ pub struct Map {
     pub rows: usize,
     pub tile_size: usize,
     pub tileset_atlas_layout: Option<Handle<TextureAtlasLayout>>,
-    tiles: Vec<Tile>,
     pub rooms: Vec<Rect>,
+    pub revealed_tiles: Vec<bool>,
+    pub visible_tiles: Vec<bool>,
+
+    tiles: Vec<Tile>,
+}
+
+impl BaseMap for Map {
+    fn is_opaque(&self, idx: usize) -> bool {
+        self.tiles[idx] == Tile::Wall
+    }
+}
+
+impl Algorithm2D for Map {
+    fn dimensions(&self) -> Point {
+        Point::new(self.cols as i32, self.rows as i32)
+    }
 }
 
 impl Map {
@@ -81,6 +108,8 @@ impl Map {
             tileset_atlas_layout: None,
             tiles: vec![Tile::Wall; cols * rows],
             rooms: vec![],
+            revealed_tiles: vec![false; cols * rows],
+            visible_tiles: vec![false; cols * rows],
         }
     }
 
@@ -111,9 +140,13 @@ impl Map {
             self.set_tile(x, y, tile);
         }
     }
+
+    pub fn xy_to_index(&self, x: usize, y: usize) -> usize {
+        y * self.cols + x
+    }
 }
 
-fn spawn_map(
+pub(crate) fn spawn_map(
     mut commands: Commands,
     mut map: ResMut<Map>,
     mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
@@ -154,17 +187,76 @@ fn spawn_map(
                     },
                     ..default()
                 },
-                TilePosition { col: c, row: r },
+                MapTile {
+                    col: c,
+                    row: r,
+                    visible: false,
+                    revealed: false,
+                },
             ));
         }
     }
 }
 
-fn update_map(mut tile: Query<(&mut TextureAtlas, &TilePosition)>, map: Res<Map>) {
-    for (mut tile_atlas, tile_position) in &mut tile {
-        tile_atlas.index = map
-            .get_tile(tile_position.col, tile_position.row)
-            .index_in_sprite_sheet();
+fn update_view(
+    mut player_view: Query<(&mut Player, &mut Viewshed)>,
+    mut tile: Query<&mut MapTile>,
+    mut map: ResMut<Map>,
+) {
+    if let Ok((mut player, mut viewshed)) = player_view.get_single_mut() {
+        if viewshed.dirty {
+            viewshed.dirty = false;
+            viewshed.visible_tiles.clear();
+            viewshed.visible_tiles = field_of_view(
+                Point::new(player.x as i32, player.y as i32),
+                viewshed.range,
+                &*map,
+            );
+            viewshed
+                .visible_tiles
+                .retain(|p| p.x >= 0 && p.x < map.cols as i32 && p.y >= 0 && p.y < map.rows as i32);
+
+            for t in map.visible_tiles.iter_mut() {
+                *t = false;
+            }
+
+            for pos in viewshed.visible_tiles.iter() {
+                let idx = map.xy_to_index(pos.x as usize, pos.y as usize);
+
+                map.revealed_tiles[idx] = true;
+                map.visible_tiles[idx] = true;
+            }
+        }
+    }
+}
+
+pub(crate) fn update_map(
+    mut q_tile: Query<(
+        &mut Handle<Image>,
+        &mut TextureAtlas,
+        &MapTile,
+        &mut Visibility,
+    )>,
+    map: Res<Map>,
+    texture_assets: Res<TextureAssets>,
+) {
+    if !map.is_changed() {
+        return;
+    }
+    for (mut spritesheet, mut tile_atlas, tile, mut tile_visible) in &mut q_tile {
+        tile_atlas.index = map.get_tile(tile.col, tile.row).index_in_sprite_sheet();
+
+        *tile_visible = if map.revealed_tiles[map.xy_to_index(tile.col, tile.row)] {
+            *spritesheet = if map.visible_tiles[map.xy_to_index(tile.col, tile.row)] {
+                texture_assets.map_atlas.clone()
+            } else {
+                texture_assets.map_atlas_darkened.clone()
+            };
+
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
     }
 }
 
@@ -177,10 +269,8 @@ fn new_map_rooms_and_corridors(map: &mut Map) {
     map.set_vertical_line(0, 0, rows - 1, Tile::Wall);
     map.set_vertical_line(cols - 1, 0, rows - 1, Tile::Wall);
 
-    // TODO: implement random map generator
-
     let mut rooms: Vec<Rect> = Vec::new();
-    const MAX_ROOMS: usize = 30;
+    const MAX_ROOMS: usize = 20;
     const MIN_SIZE: usize = 6;
     const MAX_SIZE: usize = 10;
 

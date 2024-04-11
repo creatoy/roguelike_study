@@ -33,6 +33,9 @@ enum GameState {
     Menu,
 }
 
+#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
+enum ProcessSet {}
+
 pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
