@@ -2,6 +2,7 @@
 
 mod actions;
 mod audio;
+mod enemy;
 mod loading;
 mod map;
 mod menu;
@@ -17,6 +18,7 @@ use bevy::app::App;
 #[cfg(debug_assertions)]
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::prelude::*;
+use enemy::EnemyPlugin;
 use map::{Map, MapPlugin};
 
 // This example game uses States to separate logic
@@ -47,6 +49,7 @@ impl Plugin for GamePlugin {
                 ActionsPlugin,
                 // InternalAudioPlugin,
                 PlayerPlugin,
+                EnemyPlugin,
                 MapPlugin,
             ))
             .add_systems(Startup, setup_camera);

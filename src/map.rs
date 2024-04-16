@@ -1,10 +1,11 @@
 use bevy::prelude::*;
 use bracket_pathfinding::prelude::*;
 use rand::rngs::ThreadRng;
-use rand::{random, Rng};
+use rand::Rng;
 
+use crate::enemy::Enemy;
 use crate::loading::TextureAssets;
-use crate::player::Player;
+use crate::player::{move_player, Player};
 use crate::GameState;
 
 pub struct MapPlugin;
@@ -13,7 +14,12 @@ impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Map::new(80, 45, 16))
             .add_systems(OnEnter(GameState::Playing), spawn_map)
-            .add_systems(PreUpdate, update_view.run_if(in_state(GameState::Playing)))
+            .add_systems(
+                PreUpdate,
+                update_view
+                    .run_if(in_state(GameState::Playing))
+                    .after(move_player),
+            )
             .add_systems(Update, update_map.run_if(in_state(GameState::Playing)));
     }
 }
@@ -27,8 +33,8 @@ pub enum Tile {
 impl Tile {
     pub fn index_in_sprite_sheet(&self) -> usize {
         match self {
-            Tile::Floor => 0,
-            Tile::Wall => 16,
+            Tile::Floor => 2,
+            Tile::Wall => 17 * 48 + 10,
         }
     }
 }
@@ -39,6 +45,12 @@ pub struct MapTile {
     pub row: usize,
     pub visible: bool,
     pub revealed: bool,
+}
+
+#[derive(Component)]
+pub struct Position {
+    pub x: usize,
+    pub y: usize,
 }
 
 #[derive(Component)]
@@ -151,16 +163,23 @@ pub(crate) fn spawn_map(
     mut map: ResMut<Map>,
     mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
     texture_assets: Res<TextureAssets>,
+    images: Res<Assets<Image>>,
 ) {
     let cols = map.cols;
     let rows = map.rows;
 
     new_map_rooms_and_corridors(&mut map);
 
+    let map_atlas_image = images.get(&texture_assets.map_atlas).unwrap();
+    let (atlas_cols, atlas_rows) = (
+        map_atlas_image.width() as usize / map.tile_size,
+        map_atlas_image.height() as usize / map.tile_size,
+    );
+
     let tileset_texture_atlas_layout = TextureAtlasLayout::from_grid(
         Vec2::new(map.tile_size as f32, map.tile_size as f32),
-        cols,
-        rows,
+        atlas_cols,
+        atlas_rows,
         None,
         None,
     );
@@ -199,16 +218,24 @@ pub(crate) fn spawn_map(
 }
 
 fn update_view(
-    mut player_view: Query<(&mut Player, &mut Viewshed)>,
-    mut tile: Query<&mut MapTile>,
+    mut player_view: Query<(&mut Position, &mut Viewshed), With<Player>>,
+    mut enemy: Query<(&Position, &mut Visibility), (With<Enemy>, Without<Player>)>,
     mut map: ResMut<Map>,
 ) {
-    if let Ok((mut player, mut viewshed)) = player_view.get_single_mut() {
+    enemy.iter_mut().for_each(|(e_pos, mut e_view)| {
+        if map.visible_tiles[map.xy_to_index(e_pos.x as usize, e_pos.y as usize)] {
+            *e_view = Visibility::Visible;
+        } else {
+            *e_view = Visibility::Hidden;
+        }
+    });
+
+    if let Ok((pos, mut viewshed)) = player_view.get_single_mut() {
         if viewshed.dirty {
             viewshed.dirty = false;
             viewshed.visible_tiles.clear();
             viewshed.visible_tiles = field_of_view(
-                Point::new(player.x as i32, player.y as i32),
+                Point::new(pos.x as i32, pos.y as i32),
                 viewshed.range,
                 &*map,
             );
@@ -243,21 +270,29 @@ pub(crate) fn update_map(
     if !map.is_changed() {
         return;
     }
-    for (mut spritesheet, mut tile_atlas, tile, mut tile_visible) in &mut q_tile {
-        tile_atlas.index = map.get_tile(tile.col, tile.row).index_in_sprite_sheet();
+    q_tile.iter_mut().for_each(
+        |(mut spritesheet, mut tile_atlas, tile, mut tile_visible)| {
+            tile_atlas.index = map.get_tile(tile.col, tile.row).index_in_sprite_sheet();
 
-        *tile_visible = if map.revealed_tiles[map.xy_to_index(tile.col, tile.row)] {
-            *spritesheet = if map.visible_tiles[map.xy_to_index(tile.col, tile.row)] {
-                texture_assets.map_atlas.clone()
+            if map.revealed_tiles[map.xy_to_index(tile.col, tile.row)] {
+                if map.visible_tiles[map.xy_to_index(tile.col, tile.row)] {
+                    if *spritesheet != texture_assets.map_atlas {
+                        *spritesheet = texture_assets.map_atlas.clone();
+                    }
+                } else {
+                    if *spritesheet != texture_assets.map_atlas_darkened {
+                        *spritesheet = texture_assets.map_atlas_darkened.clone();
+                    }
+                };
+
+                if *tile_visible == Visibility::Hidden {
+                    *tile_visible = Visibility::Visible;
+                }
             } else {
-                texture_assets.map_atlas_darkened.clone()
-            };
-
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-    }
+                *tile_visible = Visibility::Hidden;
+            }
+        },
+    );
 }
 
 fn new_map_rooms_and_corridors(map: &mut Map) {
