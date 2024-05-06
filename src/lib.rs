@@ -2,10 +2,10 @@
 
 mod actions;
 mod audio;
-mod enemy;
 mod loading;
 mod map;
 mod menu;
+mod monster;
 mod player;
 
 use crate::actions::ActionsPlugin;
@@ -18,8 +18,8 @@ use bevy::app::App;
 #[cfg(debug_assertions)]
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::prelude::*;
-use enemy::EnemyPlugin;
 use map::{Map, MapPlugin};
+use monster::MonsterPlugin;
 
 // This example game uses States to separate logic
 // See https://bevy-cheatbook.github.io/programming/states.html
@@ -49,7 +49,7 @@ impl Plugin for GamePlugin {
                 ActionsPlugin,
                 // InternalAudioPlugin,
                 PlayerPlugin,
-                EnemyPlugin,
+                MonsterPlugin,
                 MapPlugin,
             ))
             .add_systems(Startup, setup_camera);

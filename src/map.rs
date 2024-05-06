@@ -3,8 +3,8 @@ use bracket_pathfinding::prelude::*;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 
-use crate::enemy::Enemy;
 use crate::loading::TextureAssets;
+use crate::monster::Monster;
 use crate::player::{move_player, Player};
 use crate::GameState;
 
@@ -20,7 +20,8 @@ impl Plugin for MapPlugin {
                     .run_if(in_state(GameState::Playing))
                     .after(move_player),
             )
-            .add_systems(Update, update_map.run_if(in_state(GameState::Playing)));
+            .add_systems(Update, update_map.run_if(in_state(GameState::Playing)))
+            .add_systems(Update, update_blocks.run_if(in_state(GameState::Playing)));
     }
 }
 
@@ -48,9 +49,33 @@ pub struct MapTile {
 }
 
 #[derive(Component)]
+pub struct BlockTile;
+
+#[derive(Component, Clone, Copy)]
 pub struct Position {
     pub x: usize,
     pub y: usize,
+}
+
+impl From<Point> for Position {
+    fn from(p: Point) -> Self {
+        Position {
+            x: p.x as usize,
+            y: p.y as usize,
+        }
+    }
+}
+
+impl From<Position> for Point {
+    fn from(p: Position) -> Self {
+        Point::new(p.x as i32, p.y as i32)
+    }
+}
+
+impl From<&Position> for Point {
+    fn from(p: &Position) -> Self {
+        Point::new(p.x as i32, p.y as i32)
+    }
 }
 
 #[derive(Component)]
@@ -92,9 +117,11 @@ pub struct Map {
     pub rows: usize,
     pub tile_size: usize,
     pub tileset_atlas_layout: Option<Handle<TextureAtlasLayout>>,
+    pub tileset_grids: Option<(usize, usize)>,
     pub rooms: Vec<Rect>,
     pub revealed_tiles: Vec<bool>,
     pub visible_tiles: Vec<bool>,
+    pub blocked: Vec<bool>,
 
     tiles: Vec<Tile>,
 }
@@ -102,6 +129,35 @@ pub struct Map {
 impl BaseMap for Map {
     fn is_opaque(&self, idx: usize) -> bool {
         self.tiles[idx] == Tile::Wall
+    }
+
+    fn get_available_exits(&self, idx: usize) -> SmallVec<[(usize, f32); 10]> {
+        let mut exits = SmallVec::new();
+        let x = idx % self.cols;
+        let y = idx / self.cols;
+        let c = self.cols;
+
+        if self.is_exit_valid(x - 1, y) {
+            exits.push((idx - 1, 1.0));
+        }
+        if self.is_exit_valid(x + 1, y) {
+            exits.push((idx + 1, 1.0));
+        }
+        if self.is_exit_valid(x, y - 1) {
+            exits.push((idx - c, 1.0));
+        }
+        if self.is_exit_valid(x, y + 1) {
+            exits.push((idx + c, 1.0));
+        }
+
+        exits
+    }
+
+    fn get_pathing_distance(&self, idx1: usize, idx2: usize) -> f32 {
+        let c = self.cols;
+        let p1 = Point::new(idx1 % c, idx1 / c);
+        let p2 = Point::new(idx2 % c, idx2 / c);
+        DistanceAlg::Pythagoras.distance2d(p1, p2)
     }
 }
 
@@ -118,10 +174,12 @@ impl Map {
             rows,
             tile_size,
             tileset_atlas_layout: None,
+            tileset_grids: None,
             tiles: vec![Tile::Wall; cols * rows],
             rooms: vec![],
             revealed_tiles: vec![false; cols * rows],
             visible_tiles: vec![false; cols * rows],
+            blocked: vec![false; cols * rows],
         }
     }
 
@@ -156,6 +214,22 @@ impl Map {
     pub fn xy_to_index(&self, x: usize, y: usize) -> usize {
         y * self.cols + x
     }
+
+    pub fn populate_blocked(&mut self) {
+        for (i, tile) in self.tiles.iter_mut().enumerate() {
+            self.blocked[i] = *tile == Tile::Wall;
+        }
+    }
+
+    fn is_exit_valid(&self, x: usize, y: usize) -> bool {
+        if x < 1 || x > self.cols - 1 || y < 1 || y > self.rows - 1 {
+            return false;
+        }
+
+        // self.get_tile(x, y) == Tile::Floor
+        let idx = self.xy_to_index(x, y);
+        !self.blocked[idx]
+    }
 }
 
 pub(crate) fn spawn_map(
@@ -185,6 +259,8 @@ pub(crate) fn spawn_map(
     );
     let tileset_layout_handle = texture_atlas_layouts.add(tileset_texture_atlas_layout);
     map.tileset_atlas_layout = Some(tileset_layout_handle.clone());
+    map.tileset_grids = Some((atlas_cols, atlas_rows));
+    info!("Tileset grids: {:?}", map.tileset_grids);
 
     for r in 0..rows {
         for c in 0..cols {
@@ -218,19 +294,14 @@ pub(crate) fn spawn_map(
 }
 
 fn update_view(
-    mut player_view: Query<(&mut Position, &mut Viewshed), With<Player>>,
-    mut enemy: Query<(&Position, &mut Visibility), (With<Enemy>, Without<Player>)>,
+    mut player_view: Query<(&mut Position, &mut Viewshed, &Name), With<Player>>,
+    mut monster_view: Query<
+        (&Position, &mut Viewshed, &mut Visibility, &Name),
+        (With<Monster>, Without<Player>),
+    >,
     mut map: ResMut<Map>,
 ) {
-    enemy.iter_mut().for_each(|(e_pos, mut e_view)| {
-        if map.visible_tiles[map.xy_to_index(e_pos.x as usize, e_pos.y as usize)] {
-            *e_view = Visibility::Visible;
-        } else {
-            *e_view = Visibility::Hidden;
-        }
-    });
-
-    if let Ok((pos, mut viewshed)) = player_view.get_single_mut() {
+    if let Ok((pos, mut viewshed, player_name)) = player_view.get_single_mut() {
         if viewshed.dirty {
             viewshed.dirty = false;
             viewshed.visible_tiles.clear();
@@ -254,6 +325,27 @@ fn update_view(
                 map.visible_tiles[idx] = true;
             }
         }
+
+        monster_view
+            .iter_mut()
+            .for_each(|(e_pos, mut e_viewshed, mut e_visible, e_name)| {
+                if e_viewshed.dirty {
+                    e_viewshed.dirty = false;
+                    e_viewshed.visible_tiles.clear();
+                    e_viewshed.visible_tiles =
+                        field_of_view(Point::new(e_pos.x, e_pos.y), e_viewshed.range, &*map);
+                    e_viewshed.visible_tiles.retain(|p| {
+                        p.x >= 0 && p.x < map.cols as i32 && p.y >= 0 && p.y < map.rows as i32
+                    });
+
+                    if map.visible_tiles[map.xy_to_index(e_pos.x as usize, e_pos.y as usize)] {
+                        *e_visible = Visibility::Visible;
+                        info!("{} see {}", e_name, player_name);
+                    } else {
+                        *e_visible = Visibility::Hidden;
+                    }
+                }
+            });
     }
 }
 
@@ -293,6 +385,19 @@ pub(crate) fn update_map(
             }
         },
     );
+}
+
+fn update_blocks(
+    q_blocks: Query<&Position, (Changed<Transform>, With<BlockTile>)>,
+    mut map: ResMut<Map>,
+) {
+    map.populate_blocked();
+
+    q_blocks.iter().for_each(|pos| {
+        let idx = map.xy_to_index(pos.x, pos.y);
+
+        map.blocked[idx] = true;
+    })
 }
 
 fn new_map_rooms_and_corridors(map: &mut Map) {

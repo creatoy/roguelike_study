@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::actions::Actions;
 use crate::loading::TextureAssets;
-use crate::map::{spawn_map, Map, Position, Tile, Viewshed};
+use crate::map::{spawn_map, BlockTile, Map, Position, Tile, Viewshed};
 use crate::GameState;
 
 pub struct PlayerPlugin;
@@ -41,6 +41,8 @@ fn spawn_player(mut commands: Commands, texture_assets: Res<TextureAssets>, map:
             ..default()
         },
         Player,
+        BlockTile,
+        Name::new("Player"),
         Position {
             x: player_pos.0,
             y: player_pos.1,
@@ -72,20 +74,19 @@ pub fn move_player(
         if x as usize >= map.cols || y as usize >= map.rows || x < 0 || y < 0 {
             return;
         }
-        match map.get_tile(x as usize, y as usize) {
-            Tile::Floor => {
-                pos.x = x as usize;
-                pos.y = y as usize;
 
-                player_transform.translation = Vec3::new(
-                    pos.x as f32 * map.tile_size as f32,
-                    pos.y as f32 * map.tile_size as f32,
-                    1.0,
-                );
+        let idx = map.xy_to_index(x as usize, y as usize);
+        if !map.blocked[idx] {
+            pos.x = x as usize;
+            pos.y = y as usize;
 
-                viewshed.dirty = true;
-            }
-            _ => {}
+            player_transform.translation = Vec3::new(
+                pos.x as f32 * map.tile_size as f32,
+                pos.y as f32 * map.tile_size as f32,
+                1.0,
+            );
+
+            viewshed.dirty = true;
         }
     }
 }
