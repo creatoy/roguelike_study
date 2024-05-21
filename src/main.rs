@@ -2,10 +2,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use bevy::asset::AssetMetaCheck;
+use bevy::input::common_conditions::input_toggle_active;
 use bevy::prelude::*;
 use bevy::window::{PresentMode, PrimaryWindow};
 use bevy::winit::WinitWindows;
 use bevy::DefaultPlugins;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use roguelike::GamePlugin; // ToDo: Replace roguelike with your new crate name.
 use std::io::Cursor;
 use winit::window::Icon;
@@ -31,6 +33,9 @@ fn main() {
                     ..default()
                 })
                 .set(ImagePlugin::default_nearest()),
+        )
+        .add_plugins(
+            WorldInspectorPlugin::new().run_if(input_toggle_active(false, KeyCode::Backquote)),
         )
         .add_plugins(GamePlugin)
         .add_systems(Startup, set_window_icon)

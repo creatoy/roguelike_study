@@ -25,6 +25,7 @@ impl Plugin for ActionsPlugin {
 #[derive(Default, Resource)]
 pub struct Actions {
     pub player_movement: Option<(i32, i32)>,
+    pub attack: bool,
 }
 
 pub fn set_movement_actions(

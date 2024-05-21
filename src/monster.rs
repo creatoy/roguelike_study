@@ -1,8 +1,10 @@
 use bevy::prelude::*;
 use bracket_pathfinding::prelude::*;
+use dbg_if::dbg_if;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 
+use crate::combat::CombatStats;
 use crate::loading::TextureAssets;
 use crate::map::{spawn_map, BlockTile, Map, Position, Viewshed};
 use crate::player::Player;
@@ -36,8 +38,8 @@ fn spawn_monster(mut commands: Commands, texture_assets: Res<TextureAssets>, map
             SpriteSheetBundle {
                 transform: Transform {
                     translation: Vec3::new(
-                        monster_pos.0 as f32 * 16.0,
-                        monster_pos.1 as f32 * 16.0,
+                        monster_pos.0 as f32 * map.tile_size as f32,
+                        monster_pos.1 as f32 * map.tile_size as f32,
                         1.0,
                     ),
                     scale: Vec3::splat(1.0),
@@ -45,7 +47,8 @@ fn spawn_monster(mut commands: Commands, texture_assets: Res<TextureAssets>, map
                 },
                 texture: texture_assets.map_atlas.clone(),
                 atlas: TextureAtlas {
-                    index: rng.gen_range(5..=9) * 48 + rng.gen_range(24..32),
+                    index: rng.gen_range(5..=9) * map.tileset_grids.unwrap().0
+                        + rng.gen_range(24..32),
                     layout: map.tileset_atlas_layout.as_ref().unwrap().clone(),
                 },
                 ..default()
@@ -53,6 +56,12 @@ fn spawn_monster(mut commands: Commands, texture_assets: Res<TextureAssets>, map
             Name::new(format!("Monster #{}", i)),
             Monster,
             BlockTile,
+            CombatStats {
+                max_hp: 16,
+                hp: 16,
+                defense: 1,
+                power: 3,
+            },
             Position {
                 x: monster_pos.0,
                 y: monster_pos.1,
@@ -81,7 +90,7 @@ fn monster_ai(
         Query<&Position, With<Player>>,
     )>,
     time: Res<Time>,
-    map: Res<Map>,
+    mut map: ResMut<Map>,
     mut monster_timer: ResMut<MonsterTimer>,
 ) {
     if !monster_timer.0.tick(time.delta()).finished() {
@@ -104,11 +113,9 @@ fn monster_ai(
                     return;
                 }
 
-                let path = a_star_search(
-                    map.xy_to_index(pos.x, pos.y),
-                    map.xy_to_index(player_pos.x, player_pos.y),
-                    &*map,
-                );
+                let from = map.xy_to_index(pos.x, pos.y);
+                let to = map.xy_to_index(player_pos.x, player_pos.y);
+                let path = a_star_search(from, to, &*map);
 
                 if path.success && path.steps.len() > 1 {
                     let next = path.steps[1] as usize;
@@ -122,6 +129,12 @@ fn monster_ai(
                     );
 
                     viewshed.dirty = true;
+
+                    // Update blocked map flag while monster is moving to provent next monster from moving into it
+                    let idx = map.xy_to_index(pos.x, pos.y);
+                    map.blocked[idx] = true;
+
+                    // info!("{} can go to {:?}", name.as_str(), (pos.x, pos.y));
                 }
             } else {
                 // if monsters can't see player, player can't see monsters. so update the viewshed

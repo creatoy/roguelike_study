@@ -1,11 +1,13 @@
 use bevy::prelude::*;
+use bevy_inspector_egui::inspector_options::ReflectInspectorOptions;
+use bevy_inspector_egui::InspectorOptions;
 use bracket_pathfinding::prelude::*;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 
 use crate::loading::TextureAssets;
 use crate::monster::Monster;
-use crate::player::{move_player, Player};
+use crate::player::{player_input, Player};
 use crate::GameState;
 
 pub struct MapPlugin;
@@ -13,19 +15,22 @@ pub struct MapPlugin;
 impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Map::new(80, 45, 16))
+            .register_type::<Map>()
+            .register_type::<Rect>()
+            .register_type::<Position>()
             .add_systems(OnEnter(GameState::Playing), spawn_map)
             .add_systems(
                 PreUpdate,
                 update_view
                     .run_if(in_state(GameState::Playing))
-                    .after(move_player),
+                    .after(player_input),
             )
             .add_systems(Update, update_map.run_if(in_state(GameState::Playing)))
-            .add_systems(Update, update_blocks.run_if(in_state(GameState::Playing)));
+            .add_systems(Update, map_index.run_if(in_state(GameState::Playing)));
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Reflect, Debug, PartialEq, Clone, Copy)]
 pub enum Tile {
     Floor,
     Wall,
@@ -51,7 +56,7 @@ pub struct MapTile {
 #[derive(Component)]
 pub struct BlockTile;
 
-#[derive(Component, Clone, Copy)]
+#[derive(Component, Clone, Copy, Debug, Reflect)]
 pub struct Position {
     pub x: usize,
     pub y: usize,
@@ -85,6 +90,7 @@ pub struct Viewshed {
     pub dirty: bool,
 }
 
+#[derive(Reflect, Clone, Copy)]
 pub struct Rect {
     pub x1: usize,
     pub y1: usize,
@@ -111,7 +117,9 @@ impl Rect {
     }
 }
 
-#[derive(Resource)]
+#[derive(Reflect, Resource, Default, Clone, InspectorOptions)]
+#[reflect(Resource, InspectorOptions)]
+// #[derive(Resource)]
 pub struct Map {
     pub cols: usize,
     pub rows: usize,
@@ -122,6 +130,7 @@ pub struct Map {
     pub revealed_tiles: Vec<bool>,
     pub visible_tiles: Vec<bool>,
     pub blocked: Vec<bool>,
+    pub tile_content: Vec<Vec<Entity>>,
 
     tiles: Vec<Tile>,
 }
@@ -148,6 +157,19 @@ impl BaseMap for Map {
         }
         if self.is_exit_valid(x, y + 1) {
             exits.push((idx + c, 1.0));
+        }
+
+        if self.is_exit_valid(x - 1, y - 1) {
+            exits.push((idx - c - 1, 1.45));
+        }
+        if self.is_exit_valid(x + 1, y - 1) {
+            exits.push((idx - c + 1, 1.45));
+        }
+        if self.is_exit_valid(x - 1, y + 1) {
+            exits.push((idx + c - 1, 1.45));
+        }
+        if self.is_exit_valid(x + 1, y + 1) {
+            exits.push((idx + c + 1, 1.45));
         }
 
         exits
@@ -180,6 +202,7 @@ impl Map {
             revealed_tiles: vec![false; cols * rows],
             visible_tiles: vec![false; cols * rows],
             blocked: vec![false; cols * rows],
+            tile_content: vec![Vec::new(); cols * rows],
         }
     }
 
@@ -226,9 +249,14 @@ impl Map {
             return false;
         }
 
-        // self.get_tile(x, y) == Tile::Floor
         let idx = self.xy_to_index(x, y);
         !self.blocked[idx]
+    }
+
+    fn clear_content_index(&mut self) {
+        self.tile_content.iter_mut().for_each(|content| {
+            content.clear();
+        });
     }
 }
 
@@ -369,11 +397,11 @@ pub(crate) fn update_map(
             if map.revealed_tiles[map.xy_to_index(tile.col, tile.row)] {
                 if map.visible_tiles[map.xy_to_index(tile.col, tile.row)] {
                     if *spritesheet != texture_assets.map_atlas {
-                        *spritesheet = texture_assets.map_atlas.clone();
+                        *spritesheet = texture_assets.map_atlas.clone_weak();
                     }
                 } else {
                     if *spritesheet != texture_assets.map_atlas_darkened {
-                        *spritesheet = texture_assets.map_atlas_darkened.clone();
+                        *spritesheet = texture_assets.map_atlas_darkened.clone_weak();
                     }
                 };
 
@@ -387,17 +415,32 @@ pub(crate) fn update_map(
     );
 }
 
-fn update_blocks(
-    q_blocks: Query<&Position, (Changed<Transform>, With<BlockTile>)>,
+pub fn map_index(
     mut map: ResMut<Map>,
+    q_blocks: Query<&Position, With<BlockTile>>,
+    q_position: Query<(Entity, &Position), With<Monster>>,
 ) {
+    map.populate_blocked();
+    map.clear_content_index();
+
+    q_position.iter().for_each(|(entity, pos)| {
+        let idx = map.xy_to_index(pos.x, pos.y);
+
+        if let Ok(_) = q_blocks.get(entity) {
+            map.blocked[idx] = true;
+            map.tile_content[idx].push(entity);
+        }
+    });
+}
+
+fn update_blocks(q_blocks: Query<&Position, With<BlockTile>>, mut map: ResMut<Map>) {
     map.populate_blocked();
 
     q_blocks.iter().for_each(|pos| {
         let idx = map.xy_to_index(pos.x, pos.y);
 
         map.blocked[idx] = true;
-    })
+    });
 }
 
 fn new_map_rooms_and_corridors(map: &mut Map) {

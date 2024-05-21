@@ -69,6 +69,8 @@ webbrowser = { version = "0.8", features = ["hardened"] }
 winit = { version = "0.29", default-features = false }
 image = { version = "0.25", default-features = false }
 bracket-pathfinding = "0.8.7"
+bevy-inspector-egui = { version = "0.24.0", features = ["highlight_changes"] }
+dbg_if = "0.1.0"
 
 [build-dependencies]
 embed-resource = "2.4"

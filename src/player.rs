@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use crate::actions::Actions;
+use crate::combat::{CombatStats, WantsToMelee};
 use crate::loading::TextureAssets;
 use crate::map::{spawn_map, BlockTile, Map, Position, Tile, Viewshed};
 use crate::GameState;
@@ -15,7 +16,7 @@ pub struct Player;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Playing), spawn_player.after(spawn_map))
-            .add_systems(Update, move_player.run_if(in_state(GameState::Playing)));
+            .add_systems(Update, player_input.run_if(in_state(GameState::Playing)));
     }
 }
 
@@ -41,8 +42,13 @@ fn spawn_player(mut commands: Commands, texture_assets: Res<TextureAssets>, map:
             ..default()
         },
         Player,
-        BlockTile,
         Name::new("Player"),
+        CombatStats {
+            max_hp: 30,
+            hp: 30,
+            defense: 2,
+            power: 5,
+        },
         Position {
             x: player_pos.0,
             y: player_pos.1,
@@ -55,30 +61,36 @@ fn spawn_player(mut commands: Commands, texture_assets: Res<TextureAssets>, map:
     ));
 }
 
-pub fn move_player(
+pub fn player_input(
+    mut commands: Commands,
     time: Res<Time>,
     map: Res<Map>,
     actions: Res<Actions>,
-    mut player_query: Query<(&mut Transform, &mut Position, &mut Viewshed), With<Player>>,
+    q_combat_stats: Query<&mut CombatStats>,
+    mut q_player: Query<(Entity, &mut Transform, &mut Position, &mut Viewshed), With<Player>>,
 ) {
     if actions.player_movement.is_none() {
         return;
     }
-    let movement = (
-        actions.player_movement.unwrap().0,
-        actions.player_movement.unwrap().1,
-    );
-    if let Ok((mut player_transform, mut pos, mut viewshed)) = player_query.get_single_mut() {
+    let movement = actions.player_movement.unwrap();
+    if let Ok((player_entity, mut player_transform, mut pos, mut viewshed)) =
+        q_player.get_single_mut()
+    {
         let x = movement.0.saturating_add(pos.x as i32);
         let y = movement.1.saturating_add(pos.y as i32);
-        if x as usize >= map.cols || y as usize >= map.rows || x < 0 || y < 0 {
+        if x < 0 || y < 0 {
+            return;
+        }
+        let x = x as usize;
+        let y = y as usize;
+        if x >= map.cols || y >= map.rows {
             return;
         }
 
-        let idx = map.xy_to_index(x as usize, y as usize);
+        let idx = map.xy_to_index(x, y);
         if !map.blocked[idx] {
-            pos.x = x as usize;
-            pos.y = y as usize;
+            pos.x = x;
+            pos.y = y;
 
             player_transform.translation = Vec3::new(
                 pos.x as f32 * map.tile_size as f32,
@@ -87,6 +99,30 @@ pub fn move_player(
             );
 
             viewshed.dirty = true;
+        } else {
+            map.tile_content[idx].iter().for_each(|potential_target| {
+                match q_combat_stats.get(*potential_target) {
+                    Ok(_target) => {
+                        // Attack!
+                        commands.entity(player_entity).with_children(|parent| {
+                            parent.spawn(WantsToMelee {
+                                target: *potential_target,
+                            });
+                        });
+                        // Don't move player after attacking
+                        return;
+                    }
+                    Err(e) => {
+                        //
+                        error!(
+                            "Tile content index error, entity is :{:?}",
+                            potential_target
+                        );
+                        error!("Error: {}", e);
+                    }
+                }
+            });
+            warn!("Blocked at ({}, {})!", pos.x, pos.y);
         }
     }
 }
