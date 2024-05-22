@@ -1,24 +1,26 @@
 use bevy::{prelude::*, utils::hashbrown::HashMap};
 
-use crate::GameState;
+use crate::{player::PlayerEntity, GameState};
 
 pub struct CombatPlugin;
 
 impl Plugin for CombatPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<WantsToMelee>()
+        app.register_type::<CombatStats>()
+            .register_type::<WantsToMelee>()
             .register_type::<SufferDamage>()
             .add_systems(
                 Update,
                 (
                     melee_combat.run_if(in_state(GameState::Playing)),
                     apply_damage.run_if(in_state(GameState::Playing)),
+                    delete_the_dead.run_if(in_state(GameState::Playing)),
                 ),
             );
     }
 }
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
 pub struct CombatStats {
     pub max_hp: i32,
     pub hp: i32,
@@ -69,11 +71,12 @@ pub fn melee_combat(
     }
 
     damage_map.into_iter().for_each(|(entity, damages)| {
-        let (_, _, suffer_damage) = q_combat_stats.get_mut(entity).unwrap();
+        let (_, name, suffer_damage) = q_combat_stats.get_mut(entity).unwrap();
 
         if let Some(mut suffer_damage) = suffer_damage {
             suffer_damage.amount.extend_from_slice(&damages);
         } else {
+            info!("{} is damaged for {} hp", name, damages.iter().sum::<i32>());
             commands
                 .entity(entity)
                 .insert(SufferDamage { amount: damages });
@@ -90,8 +93,25 @@ pub fn apply_damage(
         .for_each(|(entity, mut stats, damage)| {
             stats.hp -= damage.amount.iter().sum::<i32>();
             commands.entity(entity).remove::<SufferDamage>();
-            if stats.hp <= 0 {
-                commands.entity(entity).despawn_recursive();
+            // if stats.hp <= 0 {
+            //     commands.entity(entity).despawn_recursive();
+            // }
+        });
+}
+
+pub fn delete_the_dead(
+    mut commands: Commands,
+    mut next_state: ResMut<NextState<GameState>>,
+    player_entity: Res<PlayerEntity>,
+    q_combat_stats: Query<(Entity, &mut CombatStats)>,
+) {
+    q_combat_stats
+        .iter()
+        .filter(|(_, stats)| stats.hp <= 0)
+        .for_each(|(entity, _)| {
+            if entity == player_entity.0 {
+                next_state.set(GameState::Menu);
             }
+            commands.entity(entity).despawn_recursive();
         });
 }

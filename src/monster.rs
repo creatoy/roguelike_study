@@ -1,10 +1,9 @@
 use bevy::prelude::*;
 use bracket_pathfinding::prelude::*;
-use dbg_if::dbg_if;
 use rand::rngs::ThreadRng;
 use rand::Rng;
 
-use crate::combat::CombatStats;
+use crate::combat::{CombatStats, WantsToMelee};
 use crate::loading::TextureAssets;
 use crate::map::{spawn_map, BlockTile, Map, Position, Viewshed};
 use crate::player::Player;
@@ -45,7 +44,7 @@ fn spawn_monster(mut commands: Commands, texture_assets: Res<TextureAssets>, map
                     scale: Vec3::splat(1.0),
                     ..default()
                 },
-                texture: texture_assets.map_atlas.clone(),
+                texture: texture_assets.map_atlas.clone_weak(),
                 atlas: TextureAtlas {
                     index: rng.gen_range(5..=9) * map.tileset_grids.unwrap().0
                         + rng.gen_range(24..32),
@@ -76,19 +75,19 @@ fn spawn_monster(mut commands: Commands, texture_assets: Res<TextureAssets>, map
 }
 
 fn monster_ai(
-    mut set: ParamSet<(
-        Query<
-            (
-                &mut Transform,
-                &mut Position,
-                &mut Viewshed,
-                &Name,
-                &Visibility,
-            ),
-            With<Monster>,
-        >,
-        Query<&Position, With<Player>>,
-    )>,
+    mut commands: Commands,
+    mut q_monsters: Query<
+        (
+            Entity,
+            &mut Transform,
+            &mut Position,
+            &mut Viewshed,
+            &Name,
+            &Visibility,
+        ),
+        (With<Monster>, Without<Player>),
+    >,
+    q_player: Query<(Entity, &Position), With<Player>>,
     time: Res<Time>,
     mut map: ResMut<Map>,
     mut monster_timer: ResMut<MonsterTimer>,
@@ -97,19 +96,23 @@ fn monster_ai(
         return;
     }
 
-    let player = set.p1();
-    let player_pos = player.single().clone();
+    let Ok((player_entity, &player_pos)) = q_player.get_single() else {
+        return;
+    };
 
-    let mut monsters = set.p0();
-    monsters
-        .iter_mut()
-        .for_each(|(mut transform, mut pos, mut viewshed, _name, visible)| {
+    q_monsters.iter_mut().for_each(
+        |(entity, mut transform, mut pos, mut viewshed, _name, visible)| {
             if viewshed.visible_tiles.contains(&player_pos.into()) {
                 let distance = DistanceAlg::Pythagoras.distance2d(
                     Point::new(pos.x, pos.y),
                     Point::new(player_pos.x, player_pos.y),
                 );
                 if distance < 1.5 {
+                    commands.entity(entity).with_children(|parent| {
+                        parent.spawn(WantsToMelee {
+                            target: player_entity.clone(),
+                        });
+                    });
                     return;
                 }
 
@@ -142,5 +145,6 @@ fn monster_ai(
                     viewshed.dirty = true;
                 }
             }
-        });
+        },
+    );
 }

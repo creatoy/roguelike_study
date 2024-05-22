@@ -15,6 +15,7 @@ pub struct MapPlugin;
 impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Map::new(80, 45, 16))
+            .register_type::<MapEntity>()
             .register_type::<Map>()
             .register_type::<Rect>()
             .register_type::<Position>()
@@ -44,6 +45,9 @@ impl Tile {
         }
     }
 }
+
+#[derive(Resource, Reflect, Deref)]
+pub struct MapEntity(Entity);
 
 #[derive(Component)]
 pub struct MapTile {
@@ -329,7 +333,7 @@ fn update_view(
     >,
     mut map: ResMut<Map>,
 ) {
-    if let Ok((pos, mut viewshed, player_name)) = player_view.get_single_mut() {
+    if let Ok((pos, mut viewshed, _player_name)) = player_view.get_single_mut() {
         if viewshed.dirty {
             viewshed.dirty = false;
             viewshed.visible_tiles.clear();
@@ -368,7 +372,7 @@ fn update_view(
 
                     if map.visible_tiles[map.xy_to_index(e_pos.x as usize, e_pos.y as usize)] {
                         *e_visible = Visibility::Visible;
-                        info!("{} see {}", e_name, player_name);
+                        // info!("{} see {}", e_name, player_name);
                     } else {
                         *e_visible = Visibility::Hidden;
                     }
