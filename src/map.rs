@@ -20,6 +20,7 @@ impl Plugin for MapPlugin {
             .register_type::<Rect>()
             .register_type::<Position>()
             .add_systems(OnEnter(GameState::Playing), spawn_map)
+            .add_systems(OnExit(GameState::Playing), clear_map)
             .add_systems(
                 PreUpdate,
                 update_view
@@ -210,6 +211,17 @@ impl Map {
         }
     }
 
+    pub fn clear_map(&mut self) {
+        self.tileset_atlas_layout = None;
+        self.tileset_grids = None;
+        self.tiles.fill(Tile::Wall);
+        self.rooms.clear();
+        self.revealed_tiles.fill(false);
+        self.visible_tiles.fill(false);
+        self.blocked.fill(false);
+        self.tile_content.iter_mut().for_each(|v| v.clear());
+    }
+
     pub fn set_tile(&mut self, col: usize, row: usize, tile: Tile) {
         self.tiles[row * self.cols + col] = tile;
     }
@@ -323,6 +335,11 @@ pub(crate) fn spawn_map(
             ));
         }
     }
+}
+
+pub(crate) fn clear_map(mut commands: Commands, mut map: ResMut<Map>) {
+    map.clear_map();
+    // commands.run_system(update_map);
 }
 
 fn update_view(

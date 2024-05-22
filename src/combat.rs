@@ -110,6 +110,7 @@ pub fn delete_the_dead(
         .filter(|(_, stats)| stats.hp <= 0)
         .for_each(|(entity, _)| {
             if entity == player_entity.0 {
+                commands.remove_resource::<PlayerEntity>();
                 next_state.set(GameState::Menu);
             }
             commands.entity(entity).despawn_recursive();

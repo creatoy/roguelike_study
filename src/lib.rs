@@ -3,6 +3,7 @@
 mod actions;
 mod audio;
 mod combat;
+mod gui;
 mod loading;
 mod map;
 mod menu;
@@ -23,6 +24,7 @@ use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy::time::common_conditions::on_timer;
 use combat::CombatPlugin;
+use gui::GuiPlugin;
 use map::{Map, MapPlugin};
 use monster::MonsterPlugin;
 
@@ -53,7 +55,8 @@ impl Plugin for GamePlugin {
         app.init_state::<GameState>()
             .add_plugins((
                 LoadingPlugin,
-                // MenuPlugin,
+                MenuPlugin,
+                GuiPlugin,
                 ActionsPlugin,
                 // InternalAudioPlugin,
                 PlayerPlugin,

@@ -33,7 +33,6 @@ impl Default for ButtonColors {
 struct Menu;
 
 fn setup_menu(mut commands: Commands, textures: Res<TextureAssets>) {
-    info!("menu");
     // commands.spawn(Camera2dBundle::default());
     commands
         .spawn((
@@ -46,6 +45,7 @@ fn setup_menu(mut commands: Commands, textures: Res<TextureAssets>) {
                     justify_content: JustifyContent::Center,
                     ..default()
                 },
+                background_color: Color::BLACK.into(),
                 ..default()
             },
             Menu,
@@ -173,6 +173,7 @@ fn setup_menu(mut commands: Commands, textures: Res<TextureAssets>) {
                     });
                 });
         });
+    info!("menu entered");
 }
 
 #[derive(Component)]

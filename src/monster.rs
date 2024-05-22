@@ -23,6 +23,7 @@ impl Plugin for MonsterPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(MonsterTimer(Timer::from_seconds(0.5, TimerMode::Repeating)))
             .add_systems(OnEnter(GameState::Playing), spawn_monster.after(spawn_map))
+            .add_systems(OnExit(GameState::Playing), clear_monster)
             .add_systems(Update, monster_ai.run_if(in_state(GameState::Playing)));
     }
 }
@@ -72,6 +73,15 @@ fn spawn_monster(mut commands: Commands, texture_assets: Res<TextureAssets>, map
             },
         ));
     });
+}
+
+fn clear_monster(
+    mut commands: Commands,
+    q_monsters: Query<Entity, (With<Monster>, Without<Player>)>,
+) {
+    q_monsters.iter().for_each(|monster| {
+        commands.entity(monster).despawn_recursive();
+    })
 }
 
 fn monster_ai(

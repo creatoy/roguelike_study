@@ -19,6 +19,7 @@ pub struct PlayerEntity(pub Entity);
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Playing), spawn_player.after(spawn_map))
+            .add_systems(OnExit(GameState::Playing), clear_player)
             .add_systems(Update, player_input.run_if(in_state(GameState::Playing)));
     }
 }
@@ -70,6 +71,12 @@ fn spawn_player(mut commands: Commands, texture_assets: Res<TextureAssets>, map:
         .id();
 
     commands.insert_resource(PlayerEntity(player));
+}
+
+pub fn clear_player(mut commands: Commands, q_player: Query<Entity, With<Player>>) {
+    if let Ok(player_entity) = q_player.get_single() {
+        commands.entity(player_entity).despawn_recursive();
+    }
 }
 
 pub fn player_input(
