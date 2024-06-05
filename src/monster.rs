@@ -45,11 +45,13 @@ fn spawn_monster(mut commands: Commands, texture_assets: Res<TextureAssets>, map
                     scale: Vec3::splat(1.0),
                     ..default()
                 },
-                texture: texture_assets.map_atlas.clone_weak(),
+                texture: texture_assets.map_atlas.clone(),
                 atlas: TextureAtlas {
-                    index: rng.gen_range(5..=9) * map.tileset_grids.unwrap().0
-                        + rng.gen_range(24..32),
-                    layout: map.tileset_atlas_layout.as_ref().unwrap().clone(),
+                    index: map.get_tile_index_in_sprite_sheet(
+                        rng.gen_range(24..32),
+                        rng.gen_range(5..=9),
+                    ),
+                    layout: texture_assets.map_atlas_layout.clone(),
                 },
                 ..default()
             },

@@ -45,8 +45,8 @@ fn spawn_player(mut commands: Commands, texture_assets: Res<TextureAssets>, map:
                 },
                 texture: texture_assets.map_atlas.clone(),
                 atlas: TextureAtlas {
-                    index: 25,
-                    layout: map.tileset_atlas_layout.as_ref().unwrap().clone(),
+                    index: map.get_tile_index_in_sprite_sheet(25, 0),
+                    layout: texture_assets.map_atlas_layout.clone(),
                 },
                 ..default()
             },

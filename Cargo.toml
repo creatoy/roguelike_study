@@ -61,7 +61,7 @@ bevy = { version = "0.13", default-features = false, features = [
     "bevy_debug_stepping",
 ] }
 bevy_kira_audio = { version = "0.19" }
-bevy_asset_loader = { version = "0.20" }
+bevy_asset_loader = { version = "0.20", features = ["2d"] }
 rand = { version = "0.8.3" }
 webbrowser = { version = "0.8", features = ["hardened"] }
 

@@ -28,6 +28,8 @@ use gui::GuiPlugin;
 use map::{Map, MapPlugin};
 use monster::MonsterPlugin;
 
+const HUD_ROWS: f32 = 4.0;
+
 // This example game uses States to separate logic
 // See https://bevy-cheatbook.github.io/programming/states.html
 // Or https://github.com/bevyengine/bevy/blob/main/examples/ecs/state.rs
@@ -84,7 +86,7 @@ fn setup_camera(mut commands: Commands, map: Res<Map>) {
     commands.spawn(camera_bundle);
 
     commands.spawn((
-        Text2dBundle {
+        TextBundle {
             transform: Transform::from_xyz(10.0, 10.0, 10.0),
             text: Text::from_section(
                 "FPS: 0.0",
@@ -93,7 +95,6 @@ fn setup_camera(mut commands: Commands, map: Res<Map>) {
                     ..default()
                 },
             ),
-            text_anchor: bevy::sprite::Anchor::BottomLeft,
             ..default()
         },
         FpsDiagnostic,

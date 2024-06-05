@@ -129,7 +129,6 @@ pub struct Map {
     pub cols: usize,
     pub rows: usize,
     pub tile_size: usize,
-    pub tileset_atlas_layout: Option<Handle<TextureAtlasLayout>>,
     pub tileset_grids: Option<(usize, usize)>,
     pub rooms: Vec<Rect>,
     pub revealed_tiles: Vec<bool>,
@@ -200,7 +199,6 @@ impl Map {
             cols,
             rows,
             tile_size,
-            tileset_atlas_layout: None,
             tileset_grids: None,
             tiles: vec![Tile::Wall; cols * rows],
             rooms: vec![],
@@ -212,7 +210,6 @@ impl Map {
     }
 
     pub fn clear_map(&mut self) {
-        self.tileset_atlas_layout = None;
         self.tileset_grids = None;
         self.tiles.fill(Tile::Wall);
         self.rooms.clear();
@@ -228,6 +225,14 @@ impl Map {
 
     pub fn get_tile(&self, col: usize, row: usize) -> Tile {
         self.tiles[row * self.cols + col]
+    }
+
+    pub fn get_tile_index_in_sprite_sheet(&self, col: usize, row: usize) -> usize {
+        if let Some((cols, _rows)) = self.tileset_grids {
+            row * cols + col
+        } else {
+            0
+        }
     }
 
     pub fn set_rect(&mut self, rect: &Rect, tile: Tile) {
@@ -279,7 +284,6 @@ impl Map {
 pub(crate) fn spawn_map(
     mut commands: Commands,
     mut map: ResMut<Map>,
-    mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
     texture_assets: Res<TextureAssets>,
     images: Res<Assets<Image>>,
 ) {
@@ -294,15 +298,6 @@ pub(crate) fn spawn_map(
         map_atlas_image.height() as usize / map.tile_size,
     );
 
-    let tileset_texture_atlas_layout = TextureAtlasLayout::from_grid(
-        Vec2::new(map.tile_size as f32, map.tile_size as f32),
-        atlas_cols,
-        atlas_rows,
-        None,
-        None,
-    );
-    let tileset_layout_handle = texture_atlas_layouts.add(tileset_texture_atlas_layout);
-    map.tileset_atlas_layout = Some(tileset_layout_handle.clone());
     map.tileset_grids = Some((atlas_cols, atlas_rows));
     info!("Tileset grids: {:?}", map.tileset_grids);
 
@@ -322,7 +317,7 @@ pub(crate) fn spawn_map(
                     texture: texture_assets.map_atlas.clone(),
                     atlas: TextureAtlas {
                         index: map.get_tile(c, r).index_in_sprite_sheet(),
-                        layout: tileset_layout_handle.clone(),
+                        layout: texture_assets.map_atlas_layout.clone(),
                     },
                     ..default()
                 },
@@ -418,11 +413,11 @@ pub(crate) fn update_map(
             if map.revealed_tiles[map.xy_to_index(tile.col, tile.row)] {
                 if map.visible_tiles[map.xy_to_index(tile.col, tile.row)] {
                     if *spritesheet != texture_assets.map_atlas {
-                        *spritesheet = texture_assets.map_atlas.clone_weak();
+                        *spritesheet = texture_assets.map_atlas.clone();
                     }
                 } else {
                     if *spritesheet != texture_assets.map_atlas_darkened {
-                        *spritesheet = texture_assets.map_atlas_darkened.clone_weak();
+                        *spritesheet = texture_assets.map_atlas_darkened.clone();
                     }
                 };
 
