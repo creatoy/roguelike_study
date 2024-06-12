@@ -129,7 +129,7 @@ pub struct Map {
     pub cols: usize,
     pub rows: usize,
     pub tile_size: usize,
-    pub tileset_grids: Option<(usize, usize)>,
+    pub tileset_grids: (usize, usize),
     pub rooms: Vec<Rect>,
     pub revealed_tiles: Vec<bool>,
     pub visible_tiles: Vec<bool>,
@@ -199,7 +199,7 @@ impl Map {
             cols,
             rows,
             tile_size,
-            tileset_grids: None,
+            tileset_grids: (1, 1),
             tiles: vec![Tile::Wall; cols * rows],
             rooms: vec![],
             revealed_tiles: vec![false; cols * rows],
@@ -210,7 +210,7 @@ impl Map {
     }
 
     pub fn clear_map(&mut self) {
-        self.tileset_grids = None;
+        self.tileset_grids = (1, 1);
         self.tiles.fill(Tile::Wall);
         self.rooms.clear();
         self.revealed_tiles.fill(false);
@@ -228,11 +228,7 @@ impl Map {
     }
 
     pub fn get_tile_index_in_sprite_sheet(&self, col: usize, row: usize) -> usize {
-        if let Some((cols, _rows)) = self.tileset_grids {
-            row * cols + col
-        } else {
-            0
-        }
+        row * self.tileset_grids.0 + col
     }
 
     pub fn set_rect(&mut self, rect: &Rect, tile: Tile) {
@@ -298,7 +294,7 @@ pub(crate) fn spawn_map(
         map_atlas_image.height() as usize / map.tile_size,
     );
 
-    map.tileset_grids = Some((atlas_cols, atlas_rows));
+    map.tileset_grids = (atlas_cols, atlas_rows);
     info!("Tileset grids: {:?}", map.tileset_grids);
 
     for r in 0..rows {
