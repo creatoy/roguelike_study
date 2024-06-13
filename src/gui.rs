@@ -91,43 +91,16 @@ fn setup_gui(
                             material: ui_materials.add(CustomUiMaterial {
                                 texture: texture_assets.map_atlas.clone(),
                                 tiled: AtlasTiled::new(
-                                    map.tileset_grids,
-                                    (39, 10),
-                                    Vec2::new(1.0, 1.0),
+                                    Vec2::new(
+                                        map.tileset_grids.0 as f32,
+                                        map.tileset_grids.1 as f32,
+                                    ),
+                                    Vec2::new(16.0, 16.0),
+                                    Vec2::new(39.0, 10.0),
                                 ),
                             }),
                             ..default()
                         },
-                        // AtlasImageBundle {
-                        //     style: Style {
-                        //         width: Val::Px(16.0),
-                        //         height: Val::Px(16.0),
-                        //         margin: UiRect::all(Val::Px(2.0)),
-                        //         ..default()
-                        //     },
-                        //     image: UiImage::new(texture_assets.map_atlas.clone()),
-                        //     texture_atlas: TextureAtlas {
-                        //         layout: texture_assets.map_atlas_layout.clone(),
-                        //         index: 10 * map.tileset_grids.0 + 39,
-                        //     },
-                        //     ..default()
-                        // },
-                        // ImageBundle {
-                        //     style: Style {
-                        //         width: Val::Px(50.0 * 16.0),
-                        //         height: Val::Px(16.0),
-                        //         margin: UiRect::all(Val::Px(2.0)),
-                        //         ..default()
-                        //     },
-                        //     image: UiImage::new(texture_assets.heart.clone()),
-                        //     // image: UiImage::new(texture_assets.map_atlas.clone()),
-                        //     ..default()
-                        // },
-                        // ImageScaleMode::Tiled {
-                        //     tile_x: true,
-                        //     tile_y: false,
-                        //     stretch_value: 1.0,
-                        // },
                         PlayerHpWidget,
                         Name::new("Heart icon"),
                     ));
@@ -137,13 +110,10 @@ fn setup_gui(
 
 fn update_player_hp(
     player_stats_q: Query<&CombatStats, (With<Player>, Changed<CombatStats>)>,
-    mut ui_materials: ResMut<Assets<CustomUiMaterial>>,
-    mut player_hp_widget_q: Query<(&mut Style, &Handle<CustomUiMaterial>), With<PlayerHpWidget>>,
+    mut player_hp_widget_q: Query<&mut Style, With<PlayerHpWidget>>,
 ) {
     if let Ok(stats) = player_stats_q.get_single() {
-        if let Ok((mut style, material_handle)) = player_hp_widget_q.get_single_mut() {
-            let material = ui_materials.get_mut(material_handle).unwrap();
-            material.tiled.repeat.x = stats.hp as f32;
+        if let Ok(mut style) = player_hp_widget_q.get_single_mut() {
             style.width = Val::Px(stats.hp as f32 * 16.0);
         }
     }
@@ -151,19 +121,16 @@ fn update_player_hp(
 
 #[derive(ShaderType, Debug, Clone)]
 struct AtlasTiled {
-    offset: Vec2,
-    size: Vec2,
-    repeat: Vec2,
+    atlas_grids: Vec2,
+    tile_size: Vec2,
+    tile_pos: Vec2,
 }
 impl AtlasTiled {
-    pub fn new(atlas_grids: (usize, usize), pos: (usize, usize), repeat: Vec2) -> Self {
+    pub fn new(atlas_grids: Vec2, tile_size: Vec2, tile_pos: Vec2) -> Self {
         Self {
-            offset: Vec2::new(
-                pos.0 as f32 / atlas_grids.0 as f32,
-                pos.1 as f32 / atlas_grids.1 as f32,
-            ),
-            size: Vec2::new(1.0 / atlas_grids.0 as f32, 1.0 / atlas_grids.1 as f32),
-            repeat,
+            atlas_grids,
+            tile_size,
+            tile_pos,
         }
     }
 }
@@ -178,9 +145,6 @@ struct CustomUiMaterial {
 }
 
 impl UiMaterial for CustomUiMaterial {
-    // fn vertex_shader() -> ShaderRef {
-    //     "shaders/ui_texture_atlas_tiled.wgsl".into()
-    // }
     fn fragment_shader() -> ShaderRef {
         "shaders/ui_texture_atlas_tiled.wgsl".into()
     }
